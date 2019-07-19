@@ -77,6 +77,8 @@ function createTextVNode(text) {
   };
 }
 
+const domPropsRE = /\W|^(?:value|checked|selected|muted)$/;
+
 function mountElement(vnode, container) {
   const isSVG = vnode.flags & VNodeFlags.ELEMENT_SVG;
   const el = isSVG
@@ -89,8 +91,20 @@ function mountElement(vnode, container) {
     for (let key in data) {
       switch (key) {
         case 'style':
-          for (let k in data.style) {
+          for (let k in data[key]) {
             el.style[k] = data.style[k];
+          }
+          break;
+        case 'class':
+          el.className = data[key];
+          break;
+        default:
+          if (key[0] === 'o' && key[1] === 'n') {
+            el.addEventListener(key.slice(2), data[key]);
+          } else if (domPropsRE.test(key)) {
+            el[key] = data[key];
+          } else {
+            el.setAttribute(key, data[key]);
           }
           break;
       }
@@ -99,11 +113,11 @@ function mountElement(vnode, container) {
 
   if (childFlags !== ChildrenFlags.NO_CHILDREN) {
     if (childFlags & ChildrenFlags.SINGLE_VNODE) {
-      render(children, el);
+      render(children, el, isSVG);
     } else if (childFlags & ChildrenFlags.MULTIPLE_VNODES) {
       for (let i = 0; i < children.length; i++) {
         const child = children[i];
-        render(child, el);
+        render(child, el, isSVG);
       }
     }
   }
@@ -111,10 +125,80 @@ function mountElement(vnode, container) {
   container.appendChild(el);
 }
 
-function render(vnode, container) {
+function mountComponent(vnode, container, isSVG) {
+  if (vnode.flags & VNodeFlags.COMPONENT_STATEFUL) {
+    mountStatefulComponent(vnode, container, isSVG);
+  } else {
+    mountFunctionalComponent(vnode, container, isSVG);
+  }
+}
+
+function mountStatefulComponent(vnode, container, isSVG) {
+  const instance = new vnode.tag();
+  instance.$vnode = instance.render();
+  render(instance.$vnode, container, isSVG);
+  instance.$el = vnode.el = instance.$vnode.el;
+}
+
+function mountFunctionalComponent(vnode, container, isSVG) {
+  const $vnode = vnode.tag();
+  render($vnode, container, isSVG);
+  vnode.el = $vnode.el;
+}
+
+function mountText(vnode, container) {
+  const el = document.createTextNode(vnode.children);
+  vnode.el = el;
+  container.appendChild(el);
+}
+
+function mountFragment(vnode, container, isSVG) {
+  const { children, childFlags } = vnode;
+  switch (childFlags) {
+    case ChildrenFlags.SINGLE_VNODE:
+      render(children, container, isSVG);
+      vnode.el = children.el;
+      break;
+    case ChildrenFlags.NO_CHILDREN:
+      const placeholder = createTextVNode('');
+      mountText(placeholder, container);
+      vnode.el = placeholder.el;
+      break;
+    default:
+      for (let i = 0; i < children.length; i++) {
+        render(children[i], container, isSVG);
+      }
+      vnode.el = children[0].el;
+  }
+}
+
+function mountProtal(vnode, container) {
+  const { tag, children, childFlags } = vnode;
+  const target = typeof tag === 'string' ? document.querySelector(tag) : tag;
+  if (childFlags & ChildrenFlags.SINGLE_VNODE) {
+    render(children, target);
+  } else if (childFlags & ChildrenFlags.MULTIPLE_VNODES) {
+    for (let i = 0; i < children.length; i++) {
+      render(children[i], target);
+    }
+  }
+  const placeholder = createTextVNode('');
+  mountText(placeholder, container, null);
+  vnode.el = placeholder.el;
+}
+
+function render(vnode, container, isSVG) {
   const { flags } = vnode;
   if (flags & VNodeFlags.ELEMENT) {
     mountElement(vnode, container);
+  } else if (flags & VNodeFlags.COMPONENT) {
+    mountComponent(vnode, container, isSVG);
+  } else if (flags & VNodeFlags.TEXT) {
+    mountText(vnode, container);
+  } else if (flags & VNodeFlags.FRAGMENT) {
+    mountFragment(vnode, container, isSVG);
+  } else if (flags & VNodeFlags.PORTAL) {
+    mountProtal(vnode, container, isSVG);
   }
 }
 
@@ -166,32 +250,83 @@ function h(tag, data, children) {
   };
 }
 
-render(
-  h(
-    'div',
-    {
-      style: {
-        height: '100px',
-        width: '100px',
-        backgroundColor: 'deepskyblue'
-      }
-    },
-    [
-      h('div', {
-        style: {
-          height: '50px',
-          width: '50px',
-          backgroundColor: 'green'
-        }
-      }),
-      h('div', {
-        style: {
-          height: '10px',
-          width: '10px',
-          backgroundColor: 'red'
-        }
-      })
-    ]
-  ),
-  document.getElementById('app')
-);
+// render(
+//   h(
+//     'div',
+//     {
+//       style: {
+//         height: '100px',
+//         width: '100px',
+//         backgroundColor: 'deepskyblue'
+//       }
+//     },
+//     [
+//       h('div', {
+//         style: {
+//           height: '50px',
+//           width: '50px',
+//           backgroundColor: 'green'
+//         }
+//       }),
+//       h('div', {
+//         class: 'test',
+//         style: {
+//           height: '10px',
+//           width: '10px',
+//           backgroundColor: 'red'
+//         }
+//       })
+//     ]
+//   ),
+//   document.getElementById('app')
+// );
+
+// render(
+//   h('input', {
+//     class: 'check',
+//     type: 'checkbox',
+//     checked: true,
+//     custom: 'test'
+//   }),
+//   document.getElementById('app')
+// );
+
+// render(
+//   h(
+//     'div',
+//     {
+//       onclick: () => {
+//         alert(1);
+//       }
+//     },
+//     1
+//   ),
+//   document.getElementById('app')
+// );
+
+// render(
+//   h(
+//     'div',
+//     {
+//       style: { height: '100px', width: '100px', backgroundColor: 'red' }
+//     },
+//     h(Fragment, null, [h('h1', null, 'test1'), h('h1', null, 'test2')])
+//   ),
+//   document.getElementById('app')
+// );
+
+// render(h(Portal, { target: '#test' }, 1), document.getElementById('app'));
+
+// class Test {
+//   render() {
+//     return h('div', null, 123);
+//   }
+// }
+
+// render(h(Test), document.getElementById('app'));
+
+function Test() {
+  return h('div', null, 123);
+}
+
+render(h(Test), document.getElementById('app'));
