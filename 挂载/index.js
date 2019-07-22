@@ -113,11 +113,11 @@ function mountElement(vnode, container) {
 
   if (childFlags !== ChildrenFlags.NO_CHILDREN) {
     if (childFlags & ChildrenFlags.SINGLE_VNODE) {
-      render(children, el, isSVG);
+      mount(children, el, isSVG);
     } else if (childFlags & ChildrenFlags.MULTIPLE_VNODES) {
       for (let i = 0; i < children.length; i++) {
         const child = children[i];
-        render(child, el, isSVG);
+        mount(child, el, isSVG);
       }
     }
   }
@@ -135,14 +135,14 @@ function mountComponent(vnode, container, isSVG) {
 
 function mountStatefulComponent(vnode, container, isSVG) {
   const instance = new vnode.tag();
-  instance.$vnode = instance.render();
-  render(instance.$vnode, container, isSVG);
+  instance.$vnode = instance.mount();
+  mount(instance.$vnode, container, isSVG);
   instance.$el = vnode.el = instance.$vnode.el;
 }
 
 function mountFunctionalComponent(vnode, container, isSVG) {
   const $vnode = vnode.tag();
-  render($vnode, container, isSVG);
+  mount($vnode, container, isSVG);
   vnode.el = $vnode.el;
 }
 
@@ -156,7 +156,7 @@ function mountFragment(vnode, container, isSVG) {
   const { children, childFlags } = vnode;
   switch (childFlags) {
     case ChildrenFlags.SINGLE_VNODE:
-      render(children, container, isSVG);
+      mount(children, container, isSVG);
       vnode.el = children.el;
       break;
     case ChildrenFlags.NO_CHILDREN:
@@ -166,7 +166,7 @@ function mountFragment(vnode, container, isSVG) {
       break;
     default:
       for (let i = 0; i < children.length; i++) {
-        render(children[i], container, isSVG);
+        mount(children[i], container, isSVG);
       }
       vnode.el = children[0].el;
   }
@@ -176,10 +176,10 @@ function mountProtal(vnode, container) {
   const { tag, children, childFlags } = vnode;
   const target = typeof tag === 'string' ? document.querySelector(tag) : tag;
   if (childFlags & ChildrenFlags.SINGLE_VNODE) {
-    render(children, target);
+    mount(children, target);
   } else if (childFlags & ChildrenFlags.MULTIPLE_VNODES) {
     for (let i = 0; i < children.length; i++) {
-      render(children[i], target);
+      mount(children[i], target);
     }
   }
   const placeholder = createTextVNode('');
@@ -187,7 +187,7 @@ function mountProtal(vnode, container) {
   vnode.el = placeholder.el;
 }
 
-function render(vnode, container, isSVG) {
+function mount(vnode, container, isSVG) {
   const { flags } = vnode;
   if (flags & VNodeFlags.ELEMENT) {
     mountElement(vnode, container);
@@ -213,7 +213,7 @@ function h(tag, data, children) {
     tag = data && data.target;
   } else {
     flags =
-      tag.prototype && tag.prototype.render
+      tag.prototype && tag.prototype.mount
         ? VNodeFlags.COMPONENT_STATEFUL_NORMAL
         : VNodeFlags.COMPONENT_FUNCTIONAL;
   }
@@ -248,6 +248,16 @@ function h(tag, data, children) {
     childFlags,
     el: null
   };
+}
+
+function render(vnode, container) {
+  const preVnode = container.vnode;
+  if (!preVnode) {
+    if (vnode) {
+      mount(vnode, container);
+      container.vnode = vnode;
+    }
+  }
 }
 
 // render(
