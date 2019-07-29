@@ -79,7 +79,7 @@ function createTextVNode(text) {
 
 const domPropsRE = /\W|^(?:value|checked|selected|muted)$/;
 
-function mountElement(vnode, container) {
+function mountElement(vnode, container, refNode) {
   const isSVG = vnode.flags & VNodeFlags.ELEMENT_SVG;
   const el = isSVG
     ? document.createElementNS('http://www.w3.org/2000/svg', vnode.tag)
@@ -122,7 +122,7 @@ function mountElement(vnode, container) {
     }
   }
 
-  container.appendChild(el);
+  refNode ? container.insertBefore(el, refNode) : container.appendChild(el);
 }
 
 function mountComponent(vnode, container, isSVG) {
@@ -162,7 +162,6 @@ function mountFunctionalComponent(vnode, container, isSVG) {
         const preVNode = vnode.handle.pre;
         const nextVNode = vnode.handle.next;
       } else {
-        const $vnode = vnode.tag();
         const props = vnode.data;
         const $vnode = (vnode.children = vnode.tag(props));
         mount($vnode, container, isSVG);
@@ -214,10 +213,10 @@ function mountProtal(vnode, container) {
   vnode.el = placeholder.el;
 }
 
-function mount(vnode, container, isSVG) {
+function mount(vnode, container, isSVG, refNode) {
   const { flags } = vnode;
   if (flags & VNodeFlags.ELEMENT) {
-    mountElement(vnode, container);
+    mountElement(vnode, container, refNode);
   } else if (flags & VNodeFlags.COMPONENT) {
     mountComponent(vnode, container, isSVG);
   } else if (flags & VNodeFlags.TEXT) {
@@ -271,6 +270,7 @@ function h(tag, data, children) {
     flags,
     tag,
     data,
+    key: data && data.key ? data.key : null,
     children,
     childFlags,
     el: null
@@ -427,12 +427,37 @@ function patchChildren(
           }
           break;
         default:
+          const preLen = preChildren.length;
+          const nextLen = nextChildren.length;
+          const commonLen = Math.min(preLen, nextLen);
+          for (let i = 0; i < commonLen; i++) {
+            patch(preChildren[i], nextChildren[i], container);
+          }
+          let lastIndex = 0;
           for (let i = 0; i < preChildren.length; i++) {
-            container.removeChild(preChildren[i].el);
+            const preVNode = preChildren[i];
+            let find = false;
+            for (let j = 0; j < nextChildren.length; j++) {
+              const nextVNode = nextChildren[j];
+              if (preVNode.key === nextVNode.key) {
+                find = true;
+                if (j > lastIndex) {
+                  lastIndex = j;
+                } else {
+                  container.insertBefore(nextChildren[j].el, preChildren[j].el);
+                }
+                break;
+              }
+            }
+            if (!find) {
+              container.removeChild(preVNode.el);
+            }
           }
-          for (let i = 0; i < nextChildren.length; i++) {
-            mount(nextChildren[i], container);
-          }
+          nextChildren.forEach((v, i) => {
+            if (!preChildren.some(t => t.key === v.key)) {
+              mount(v, container, false, nextChildren[i + 1].el);
+            }
+          });
           break;
       }
       break;
@@ -527,121 +552,20 @@ function patch(preVNode, nextVNode, container) {
   }
 }
 
-// const preT = h('div', '', 1);
-// const curT = h(function() {
-//   return h('div', '', 2);
-// });
+const preT = h('div', '', [
+  h('div', { key: 'a' }, 'a'),
+  h('div', { key: 'b' }, 'b'),
+  h('div', { key: 'c' }, 'c'),
+  h('div', { key: 'd' }, 'd')
+]);
+const curT = h('div', '', [
+  h('div', { key: 'a' }, 'a'),
+  h('div', { key: 'q' }, 'q'),
+  h('div', { key: 'c' }, 'c'),
+  h('div', { key: 'd' }, 'd')
+]);
 
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h(
-//   'div',
-//   {
-//     style: {
-//       height: '100px',
-//       width: '100px',
-//       backgroundColor: 'red'
-//     },
-//     test: 1
-//   },
-//   1
-// );
-// const curT = h(
-//   'div',
-//   {
-//     style: {
-//       height: '100px',
-//       width: '100px',
-//       backgroundColor: 'yellow'
-//     },
-//     custom: 2
-//   },
-//   1
-// );
-
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h('div', '', h('p', { style: { backgroundColor: 'red' } }, 1));
-
-// const curT = h('div', '', h('p', { style: { backgroundColor: 'blue' } }, 1));
-
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h('div', '', h('p', { style: { backgroundColor: 'red' } }, 1));
-
-// const curT = h('div');
-
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h('div', '', h('p', { style: { backgroundColor: 'red' } }, 1));
-
-// const curT = h('div', '', [h('p', '', 123), h('p', '', 456)]);
-
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h('div', '', 1);
-
-// const curT = h('div', '', 2);
-
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h(Fragment, '', [h('p', '', 1), h('p', '', 2)]);
-
-// const curT = h(Fragment, '', [h('p', '', 11), h('p', '', 22)]);
-
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h(Portal, { target: '#test' }, [h('p', '', 1), h('p', '', 2)]);
-
-// const curT = h(Portal, { target: '#other' }, [h('p', '', 11), h('p', '', 22)]);
-
-// render(preT, document.getElementById('app'));
-
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-class T {
-  test = '123';
-
-  mounted() {
-    setTimeout(() => {
-      this.test = '456';
-      this._update();
-    }, 1000);
-  }
-
-  render() {
-    return h('div', '', this.test);
-  }
-}
-
-render(h(T), document.getElementById('app'));
+render(preT, document.getElementById('app'));
+setTimeout(() => {
+  render(curT, document.getElementById('app'));
+}, 1000);
