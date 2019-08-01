@@ -427,92 +427,41 @@ function patchChildren(
           }
           break;
         default:
-          let oldStartIndex = 0;
-          let oldEndIndex = preChildren.length - 1;
-          let nextStartIndex = 0;
-          let nextEndIndex = nextChildren.length - 1;
-          let oldStartVNode = preChildren[oldStartIndex];
-          let oldEndVNode = preChildren[oldEndIndex];
-          let nextStartVNode = nextChildren[nextStartIndex];
-          let nextEndVNode = nextChildren[nextEndIndex];
-          while (
-            oldStartIndex <= oldEndIndex &&
-            nextStartIndex <= nextEndIndex
-          ) {
-            // 节点遍历为undefined
-            if (!oldStartVNode) {
-              oldStartVNode = preChildren[++oldStartIndex];
+          let lastIndex = 0;
+          for (let i = 0; i < nextChildren.length; i++) {
+            let finded = false;
+            const nextVNode = nextChildren[i];
+            for (let j = 0; j < preChildren.length; j++) {
+              const preVNode = preChildren[j];
+              if (nextVNode.key === preVNode.key) {
+                finded = true;
+                patch(preVNode, nextVNode, container);
+                if (j > lastIndex) {
+                  lastIndex = j;
+                } else {
+                  container.insertBefore(
+                    nextVNode.el,
+                    nextChildren[i - 1].el.nextSibling
+                  );
+                }
+                break;
+              }
             }
-            // 节点遍历为undefined
-            else if (!oldEndVNode) {
-              oldEndVNode = preChildren[--oldEndIndex];
-            }
-            // 新旧节点第一个vnode相同
-            else if (oldStartVNode.key === nextStartVNode.key) {
-              patch(oldStartVNode, nextStartVNode, container);
-              oldStartVNode = preChildren[++oldStartIndex];
-              nextStartVNode = nextChildren[++nextStartIndex];
-            }
-            // 新旧节点最后一个vnode相同
-            else if (oldEndVNode.key === nextEndVNode.key) {
-              patch(oldEndVNode, nextEndVNode, container);
-              oldEndVNode = preChildren[--oldEndIndex];
-              nextEndVNode = nextChildren[--nextEndIndex];
-            }
-            // 新节点最后一个节点与旧节点第一个节点相同
-            else if (oldStartVNode.key === nextEndVNode.key) {
-              patch(oldStartVNode, nextEndVNode, container);
-              container.insertBefore(
-                nextEndVNode.el,
-                oldEndVNode.el.nextSibling
+            if (!finded) {
+              mount(
+                nextVNode,
+                container,
+                false,
+                nextChildren[i - 1].el.nextSibling
               );
-              oldStartVNode = preChildren[++oldStartIndex];
-              nextEndVNode = nextChildren[--nextEndIndex];
-            }
-            // 新节点第一个节点与旧节点最后一个节点相同
-            else if (oldEndVNode.key === nextStartVNode.key) {
-              patch(oldEndVNode, nextStartVNode, container);
-              container.insertBefore(nextStartVNode.el, oldStartVNode.el);
-              oldEndVNode = preChildren[--oldEndIndex];
-              nextStartVNode = nextChildren[++nextStartIndex];
-            }
-            // 双端比较没有触碰到节点
-            else {
-              const indexOld = preChildren.findIndex(v => {
-                return v.key === nextStartVNode.key;
-              });
-              if (indexOld >= 0) {
-                const preVNold = preChildren[indexOld];
-                patch(preVNold, nextStartVNode, container);
-                container.insertBefore(preVNold.el, oldStartVNode.el);
-                preChildren[indexOld] = undefined;
-              }
-              // 新增节点
-              else {
-                mount(nextStartVNode, container, false, oldStartVNode.el);
-              }
-              // 移动到下一位
-              nextStartVNode = nextChildren[++nextStartIndex];
             }
           }
 
-          // 漏掉节点的情况
-          if (oldEndIndex < oldStartIndex) {
-            for (let i = nextStartIndex; i <= nextEndIndex; i++) {
-              mount(
-                nextChildren[i],
-                container,
-                false,
-                oldStartVNode ? oldStartVNode.el : oldEndVNode.el.nextSibling
-              );
+          preChildren.forEach(v => {
+            if (!nextChildren.some(t => v.key === t.key)) {
+              container.removeChild(v.el);
             }
-          }
-          // 多余的节点
-          else if (nextEndIndex < nextStartIndex) {
-            for (let i = oldStartIndex; i <= oldEndIndex; i++) {
-              container.removeChild(preChildren[i].el);
-            }
-          }
+          });
           break;
       }
       break;
@@ -607,76 +556,26 @@ function patch(preVNode, nextVNode, container) {
   }
 }
 
-// const preT = h('div', '', [
-//   h('div', { key: 'a' }, 'a'),
-//   h('div', { key: 'b' }, 'b'),
-//   h('div', { key: 'c' }, 'c'),
-//   h('div', { key: 'd' }, 'd')
-// ]);
-// const curT = h('div', '', [
-//   h('div', { key: 'd' }, 'd'),
-//   h('div', { key: 'b' }, 'b'),
-//   h('div', { key: 'a' }, 'a'),
-//   h('div', { key: 'c' }, 'c')
-// ]);
+render(
+  h('div', '', [
+    h('div', { key: 'a' }, 'a'),
+    h('div', { key: 'q' }, 'q'),
+    h('div', { key: 'b' }, 'b'),
+    h('div', { key: 'c' }, 'c'),
+    h('div', { key: 'd' }, 'd')
+  ]),
+  document.getElementById('app')
+);
 
-// render(preT, document.getElementById('app'));
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h('div', '', [
-//   h('div', { key: 'a' }, 'a'),
-//   h('div', { key: 'b' }, 'b'),
-//   h('div', { key: 'c' }, 'c'),
-//   h('div', { key: 'd' }, 'd')
-// ]);
-// const curT = h('div', '', [
-//   h('div', { key: 'b' }, 'b'),
-//   h('div', { key: 'd' }, 'd'),
-//   h('div', { key: 'a' }, 'a'),
-//   h('div', { key: 'c' }, 'c')
-// ]);
-
-// render(preT, document.getElementById('app'));
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-// const preT = h('div', '', [
-//   h('div', { key: 'a' }, 'a'),
-//   h('div', { key: 'b' }, 'b'),
-//   h('div', { key: 'c' }, 'c'),
-//   h('div', { key: 'd' }, 'd')
-// ]);
-// const curT = h('div', '', [
-//   h('div', { key: 'e' }, 'e'),
-//   h('div', { key: 'b' }, 'b'),
-//   h('div', { key: 'd' }, 'd'),
-//   h('div', { key: 'a' }, 'a'),
-//   h('div', { key: 'c' }, 'c')
-// ]);
-
-// render(preT, document.getElementById('app'));
-// setTimeout(() => {
-//   render(curT, document.getElementById('app'));
-// }, 1000);
-
-const preT = h('div', '', [
-  h('div', { key: 'a' }, 'a'),
-  h('div', { key: 'b' }, 'b'),
-  h('div', { key: 'e' }, 'e'),
-  h('div', { key: 'c' }, 'c')
-]);
-const curT = h('div', '', [
-  h('div', { key: 'e' }, 'e'),
-  h('div', { key: 'a' }, 'a'),
-  h('div', { key: 'b' }, 'b'),
-  h('div', { key: 'c' }, 'c'),
-  h('div', { key: 'd' }, 'd')
-]);
-
-render(preT, document.getElementById('app'));
 setTimeout(() => {
-  render(curT, document.getElementById('app'));
+  render(
+    h('div', '', [
+      h('div', { key: 'd' }, 'd'),
+      h('div', { key: 'e' }, 'e'),
+      h('div', { key: 'b' }, 'b'),
+      h('div', { key: 'a' }, 'a'),
+      h('div', { key: 'c' }, 'c')
+    ]),
+    document.getElementById('app')
+  );
 }, 1000);
